@@ -136,7 +136,7 @@
         });
 
         async function authenticateAndFetch(email, password) {
-            const loginUrl = 'https://example.com/login'; // Replace with actual login URL
+            const loginUrl = 'https://api.momence.com/auth/login'; // Replace with actual login URL
 
             try {
                 const sessionCookie = await authenticate(loginUrl, email, password);
