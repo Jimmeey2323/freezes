@@ -294,22 +294,25 @@
         }
 
         async function authenticate(loginUrl, email, password) {
-            const response = await fetch(loginUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ email, password })
-            });
+    const response = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({ email, password })
+    });
 
-            if (response.ok) {
-                const cookies = response.headers.get('set-cookie');
-                return cookies ? cookies.split(';')[0] : null;
-            } else {
-                throw new Error('Authentication failed.');
-            }
-        }
+    const responseBody = await response.json(); // Capture the response body for debugging
+
+    if (response.ok) {
+        const cookies = response.headers.get('set-cookie');
+        return cookies ? cookies.split(';')[0] : null;
+    } else {
+        logError(`Authentication failed. Status: ${response.status}, Response: ${JSON.stringify(responseBody)}`);
+        throw new Error('Authentication failed.');
+    }
+}
     </script>
 </body>
 </html>
