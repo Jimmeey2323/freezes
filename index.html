@@ -3,144 +3,313 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Data Table</title>
+    <title>Membership Data Table</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        .container {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 1s ease-in-out;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
         }
         table {
-            width: 90%;
+            width: 100%;
             border-collapse: collapse;
-            margin: 25px 0;
-            font-size: 18px;
-            text-align: left;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-            background-color: #fff;
+            margin-top: 20px;
+            display: none;
         }
         th, td {
-            padding: 12px;
+            padding: 10px;
+            text-align: left;
             border-bottom: 1px solid #ddd;
         }
         th {
-            background-color: #009879;
+            background-color: #4CAF50;
             color: white;
         }
         tr:hover {
-            background-color: #f1f1f1;
+            background-color: #f5f5f5;
+            transition: background-color 0.3s ease;
         }
-        caption {
-            font-size: 24px;
-            margin: 10px;
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 20px;
+            color: #888;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 20px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        #auth-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+        input[type="text"], input[type="password"] {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #45a049;
         }
     </style>
 </head>
 <body>
-
-    <table id="data-table">
-        <caption>Membership History</caption>
-        <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>History Type</th>
-                <th>History Id</th>
-                <th>Discount Code</th>
-                <th>Member Name</th>
-                <th>Membership Name</th>
-                <th>Membership Id</th>
-                <th>Member Id</th>
-                <th>Bought Membership Id</th>
-                <th>Host Id</th>
-                <th>Start Date</th>
-                <th>End Date</th>
-                <th>Classes Left</th>
-                <th>Usage Limit For Sessions</th>
-                <th>Created At</th>
-                <th>Payment Method</th>
-                <th>Payment Source</th>
-                <th>Freeze Attempts</th>
-                <th>Frozen Days</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- Data will be inserted here -->
-        </tbody>
-    </table>
+    <div class="container">
+        <h1>Membership Data</h1>
+        <div id="auth-section">
+            <input type="text" id="email" placeholder="Enter your email">
+            <input type="password" id="password" placeholder="Enter your password">
+            <button id="submit-auth">Authenticate</button>
+        </div>
+        <div id="log" class="log"></div>
+        <div id="loading" class="loading" style="display:none;">Loading data, please wait...</div>
+        <div id="error" class="error"></div>
+        <table id="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>History Type</th>
+                    <th>History Id</th>
+                    <th>Discount Code</th>
+                    <th>Member Name</th>
+                    <th>Membership Name</th>
+                    <th>Membership Id</th>
+                    <th>Member Id</th>
+                    <th>Bought Membership Id</th>
+                    <th>Host Id</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Classes Left</th>
+                    <th>Usage Limit For Sessions</th>
+                    <th>Created At</th>
+                    <th>Payment Method</th>
+                    <th>Payment Source</th>
+                    <th>Freeze Attempts</th>
+                    <th>Frozen Days</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 
     <script>
-        async function fetchData() {
-            const sessionCookie = "your-session-cookie"; // Replace with actual session cookie
-            const memberIds = [123, 456, 789]; // Replace with actual member IDs
+        document.getElementById('submit-auth').addEventListener('click', function () {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (email && password) {
+                authenticateAndFetch(email, password);
+            } else {
+                alert('Please enter both email and password.');
+            }
+        });
+
+        async function authenticateAndFetch(email, password) {
+            const loginUrl = 'https://api.momence.com/auth/login'; // Replace with actual login URL
+
+            try {
+                const sessionCookie = await authenticate(loginUrl, email, password);
+                if (!sessionCookie) {
+                    logError('Authentication failed.');
+                    return;
+                }
+
+                const memberIds = prompt('Enter Member IDs (comma separated):').split(',');
+                if (memberIds.length === 0) {
+                    logError('No Member IDs provided.');
+                    return;
+                }
+
+                fetchDataForMemberHistoryIds(memberIds, sessionCookie);
+            } catch (error) {
+                logError('Error: ' + error.message);
+            }
+        }
+
+        async function fetchDataForMemberHistoryIds(memberIds, sessionCookie) {
             const batchSize = 200;
-            const historySheetData = [];
+            const uniqueMemberIds = [...new Set(memberIds)];
+            document.getElementById("loading").style.display = "block";
 
-            for (let i = 0; i < memberIds.length; i += batchSize) {
-                const batchMemberIds = memberIds.slice(i, i + batchSize);
-                for (const memberId of batchMemberIds) {
-                    const apiUrl = `https://readonly-api.momence.com/host/13752/customers/${memberId}/history`;
-                    const response = await fetch(apiUrl, {
-                        method: 'GET',
-                        headers: {
-                            'Cookie': sessionCookie,
-                            'Accept': 'application/json',
-                        }
-                    });
+            try {
+                for (let i = 0; i < uniqueMemberIds.length; i += batchSize) {
+                    const batchMemberIds = uniqueMemberIds.slice(i, i + batchSize);
+                    await processMemberBatch(batchMemberIds, sessionCookie);
+                }
+            } catch (error) {
+                logError('Error fetching data for member IDs: ' + error.message);
+            } finally {
+                document.getElementById("loading").style.display = "none";
+            }
+        }
 
-                    const data = await response.json();
-                    data.forEach(entry => {
-                        if (entry.type === 'membership') {
-                            const row = [
-                                new Date(entry.timestamp).toLocaleString(), entry.type, entry.id, entry.discountCode || '-',
-                                entry.memberName || '-', entry.membershipName || '-', entry.membershipId || '-', entry.memberId || '-',
-                                entry.boughtMembershipId || '-', entry.hostId || '-', new Date(entry.startDate).toLocaleDateString() || '-',
-                                new Date(entry.endDate).toLocaleDateString() || '-', entry.classesLeft || '-', entry.usageLimitForSessions || '-',
-                                new Date(entry.createdAt).toLocaleString() || '-', entry.paymentMethod || '-', entry.paymentSource || '-',
-                                0, 0 // Initialize freeze attempts and frozen days
-                            ];
+        async function processMemberBatch(memberIds, sessionCookie) {
+            const requests = memberIds.map(memberId => {
+                const apiUrl = `https://readonly-api.momence.com/host/13752/customers/${memberId}/history`;
+                return fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Cookie': sessionCookie,
+                        'Accept': 'application/json',
+                    }
+                });
+            });
 
-                            // Process activities for freeze/unfreeze
-                            const freezeData = { freezeAttempts: 0, frozenDays: 0 };
-                            if (entry.activities) {
-                                let freezeStartDate = null;
-                                entry.activities.forEach(activity => {
-                                    if (activity.type === 'bought-membership-freezed') {
-                                        freezeData.freezeAttempts++;
-                                        freezeStartDate = new Date(activity.createdAt);
-                                    } else if (activity.type === 'bought-membership-unfreezed' && freezeStartDate) {
-                                        freezeData.frozenDays += Math.ceil((new Date(activity.createdAt) - freezeStartDate) / (1000 * 60 * 60 * 24));
-                                        freezeStartDate = null;
-                                    }
-                                });
+            try {
+                const responses = await Promise.all(requests);
+                const allRows = [];
+                const freezeData = {};
+
+                for (let i = 0; i < responses.length; i++) {
+                    const data = await responses[i].json();
+                    const memberId = memberIds[i];
+
+                    if (data) {
+                        data.forEach(entry => {
+                            if (entry.type === 'membership') {
+                                const row = [
+                                    formatISTDate(entry.timestamp), entry.type || '-', entry.id || '-', entry.discountCode || '-', entry.memberName || '-', entry.membershipName || '-',
+                                    entry.membershipId || '-', entry.memberId || '-', entry.boughtMembershipId || '-', entry.hostId || '-', formatISTDate(entry.startDate), formatISTDate(entry.endDate),
+                                    entry.classesLeft || '-', entry.usageLimitForSessions || '-', formatISTDate(entry.createdAt), entry.paymentMethod || '-', entry.paymentSource || '-'
+                                ];
+
+                                if (!freezeData[memberId]) {
+                                    freezeData[memberId] = {};
+                                }
+                                if (!freezeData[memberId][entry.boughtMembershipId]) {
+                                    freezeData[memberId][entry.boughtMembershipId] = { freezeAttempts: 0, frozenDays: 0, freezeDates: [] };
+                                }
+
+                                if (entry.activities) {
+                                    entry.activities.forEach(activity => {
+                                        if (activity.type === 'bought-membership-freezed') {
+                                            freezeData[memberId][entry.boughtMembershipId].freezeAttempts++;
+                                            freezeData[memberId][entry.boughtMembershipId].freezeDates.push({ type: 'freeze', date: new Date(activity.createdAt) });
+                                        } else if (activity.type === 'bought-membership-unfreezed') {
+                                            freezeData[memberId][entry.boughtMembershipId].freezeDates.push({ type: 'unfreeze', date: new Date(activity.createdAt) });
+                                        }
+                                    });
+                                }
+
+                                allRows.push(row);
                             }
-                            row[17] = freezeData.freezeAttempts;
-                            row[18] = freezeData.frozenDays;
+                        });
+                    }
+                }
 
-                            historySheetData.push(row);
+                calculateFrozenDays(freezeData, allRows);
+                populateTable(allRows);
+            } catch (error) {
+                logError('Error processing member batch: ' + error.message);
+            }
+        }
+
+        function calculateFrozenDays(freezeData, allRows) {
+            for (const memberId in freezeData) {
+                for (const boughtMembershipId in freezeData[memberId]) {
+                    const freezeInfo = freezeData[memberId][boughtMembershipId];
+                    let frozenDays = 0;
+                    let freezeStartDate = null;
+
+                    freezeInfo.freezeDates.sort((a, b) => a.date - b.date);
+
+                    freezeInfo.freezeDates.forEach(event => {
+                        if (event.type === 'freeze') {
+                            freezeStartDate = event.date;
+                        } else if (event.type === 'unfreeze' && freezeStartDate) {
+                            frozenDays += Math.ceil((event.date - freezeStartDate) / (1000 * 60 * 60 * 24));
+                            freezeStartDate = null;
                         }
                     });
+
+                    freezeInfo.frozenDays = frozenDays;
                 }
             }
 
-            const tbody = document.querySelector("#data-table tbody");
-            historySheetData.forEach(rowData => {
-                const row = document.createElement('tr');
-                rowData.forEach(cellData => {
-                    const cell = document.createElement('td');
-                    cell.textContent = cellData;
-                    row.appendChild(cell);
-                });
-                tbody.appendChild(row);
+            allRows.forEach(row => {
+                const memberId = row[7];
+                const boughtMembershipId = row[8];
+                const freezeInfo = freezeData[memberId][boughtMembershipId];
+                row.push(freezeInfo.freezeAttempts, freezeInfo.frozenDays);
             });
         }
 
-        document.addEventListener('DOMContentLoaded', fetchData);
-    </script>
+        function formatISTDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        }
 
+        function populateTable(data) {
+            const tableBody = document.querySelector("#data-table tbody");
+            tableBody.innerHTML = '';
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                row.forEach(cell => {
+                    const td = document.createElement('td');
+                    td.textContent = cell;
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+
+            document.getElementById("data-table").style.display = "table";
+        }
+
+        function logError(message) {
+            const errorDiv = document.getElementById("error");
+            errorDiv.textContent = message;
+        }
+
+        async function authenticate(loginUrl, email, password) {
+            const response = await fetch(loginUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ email, password })
+            });
+
+            if (response.ok) {
+                const cookies = response.headers.get('set-cookie');
+                return cookies ? cookies.split(';')[0] : null;
+            } else {
+                throw new Error('Authentication failed.');
+            }
+        }
+    </script>
 </body>
 </html>
