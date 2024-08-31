@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Member History</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            max-width: 1200px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            color: #555;
+        }
+        .error {
+            color: red;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Member History</h1>
+        <div id="loading" class="loading">Loading...</div>
+        <div id="error" class="error"></div>
+        <table id="historyTable" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>History Type</th>
+                    <th>History Id</th>
+                    <th>Discount Code</th>
+                    <th>Member Name</th>
+                    <th>Membership Name</th>
+                    <th>Membership Id</th>
+                    <th>Member Id</th>
+                    <th>Bought Membership Id</th>
+                    <th>Host Id</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Classes Left</th>
+                    <th>Usage Limit For Sessions</th>
+                    <th>Created At</th>
+                    <th>Payment Method</th>
+                    <th>Payment Source</th>
+                    <th>Freeze Attempts</th>
+                    <th>Frozen Days</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const memberIds = prompt('Please enter member IDs separated by commas:');
+            if (memberIds) {
+                fetchDataForMemberHistoryIds(memberIds.split(',').map(id => id.trim()));
+            } else {
+                document.getElementById('loading').innerText = 'No member IDs provided.';
+            }
+        });
+
+        async function fetchDataForMemberHistoryIds(memberIds) {
+            const batchSize = 200;
+            const historyTable = document.getElementById('historyTable').getElementsByTagName('tbody')[0];
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+
+            try {
+                const sessionCookie = await authenticate('loginUrl', 'email', 'password');
+                if (!sessionCookie) {
+                    throw new Error('Authentication failed.');
+                }
+
+                loadingDiv.innerText = 'Fetching data...';
+
+                for (let i = 0; i < memberIds.length; i += batchSize) {
+                    const batchMemberIds = memberIds.slice(i, i + batchSize);
+                    await processMemberBatch(batchMemberIds, sessionCookie, historyTable);
+                }
+
+                loadingDiv.style.display = 'none';
+                historyTable.parentElement.style.display = 'table';
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                errorDiv.innerText = 'Error: ' + error.message;
+            }
+        }
+
+        async function processMemberBatch(memberIds, sessionCookie, historyTable) {
+            const requests = memberIds.map(memberId => {
+                const apiUrl = `https://readonly-api.momence.com/host/13752/customers/${memberId}/history`;
+                return fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Cookie': sessionCookie,
+                        'Accept': 'application/json',
+                    }
+                }).then(response => response.json());
+            });
+
+            try {
+                const responses = await Promise.all(requests);
+                const allRows = [];
+                const freezeData = {};
+
+                responses.forEach((data, index) => {
+                    const memberId = memberIds[index];
+
+                    if (data) {
+                        data.forEach(entry => {
+                            if (entry.type === 'membership') {
+                                const row = [
+                                    formatISTDate(entry.timestamp), formatValue(entry.type), formatValue(entry.id), formatValue(entry.discountCode), formatValue(entry.memberName), formatValue(entry.membershipName),
+                                    formatValue(entry.membershipId), formatValue(entry.memberId), formatValue(entry.boughtMembershipId), formatValue(entry.hostId), formatISTDate(entry.startDate), formatISTDate(entry.endDate),
+                                    formatValue(entry.classesLeft), formatValue(entry.usageLimitForSessions), formatISTDate(entry.createdAt), formatValue(entry.paymentMethod), formatValue(entry.paymentSource)
+                                ];
+
+                                if (!freezeData[memberId]) {
+                                    freezeData[memberId] = {};
+                                }
+                                if (!freezeData[memberId][entry.boughtMembershipId]) {
+                                    freezeData[memberId][entry.boughtMembershipId] = { freezeAttempts: 0, frozenDays: 0, freezeDates: [] };
+                                }
+
+                                if (entry.activities) {
+                                    entry.activities.forEach(activity => {
+                                        if (activity.type === 'bought-membership-freezed') {
+                                            freezeData[memberId][entry.boughtMembershipId].freezeAttempts++;
+                                            freezeData[memberId][entry.boughtMembershipId].freezeDates.push({ type: 'freeze', date: new Date(activity.createdAt) });
+                                        } else if (activity.type === 'bought-membership-unfreezed') {
+                                            freezeData[memberId][entry.boughtMembershipId].freezeDates.push({ type: 'unfreeze', date: new Date(activity.createdAt) });
+                                        }
+                                    });
+                                }
+
+                                allRows.push(row);
+                            }
+                        });
+                    }
+                });
+
+                for (const memberId in freezeData) {
+                    for (const boughtMembershipId in freezeData[memberId]) {
+                        const freezeInfo = freezeData[memberId][boughtMembershipId];
+                        let frozenDays = 0;
+                        let freezeStartDate = null;
+
+                        freezeInfo.freezeDates.sort((a, b) => a.date - b.date);
+
+                        freezeInfo.freezeDates.forEach(event => {
+                            if (event.type === 'freeze') {
+                                freezeStartDate = event.date;
+                            } else if (event.type === 'unfreeze' && freezeStartDate) {
+                                frozenDays += Math.ceil((event.date - freezeStartDate) / (1000 * 60 * 60 * 24));
+                                freezeStartDate = null;
+                            }
+                        });
+
+                        freezeInfo.frozenDays = frozenDays;
+                    }
+                }
+
+                allRows.forEach(row => {
+                    const memberId = row[7];
+                    const boughtMembershipId = row[8];
+                    const freezeInfo = freezeData[memberId][boughtMembershipId];
+                    row.push(freezeInfo.freezeAttempts, freezeInfo.frozenDays);
+                });
+
+                allRows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    row.forEach(cell => {
+                        const td = document.createElement('td');
+                        td.innerText = cell;
+                        tr.appendChild(td);
+                    });
+                    historyTable.appendChild(tr);
+                });
+            } catch (error) {
+                throw new Error('Error processing member batch: ' + error.message);
+            }
+        }
+
+        function formatISTDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        }
+
+        function formatValue(value) {
+            return value === undefined || value === null || value === '' ? '-' : value;
+        }
+
+        async function authenticate(loginUrl, email, password) {
+            try {
+                const response = await fetch(loginUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                const cookie = response.headers.get('Set-Cookie');
+                return cookie ? cookie.split(';')[0] : null;
+            } catch (error) {
+                throw new Error('Error during authentication: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
